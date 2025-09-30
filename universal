@@ -165,7 +165,10 @@ KUYTab:CreateButton({
 
         local function createESP(player)
             if ESPObjects[player] then return end
-            ESPObjects[player] = {Box = createDrawing("Square", {Thickness = 1, Color = Color3.new(1,1,1), Transparency = 1, Filled = false, Visible = false}), Skeleton = {}}
+            ESPObjects[player] = {
+                Box = createDrawing("Square", {Thickness = 1, Color = Color3.new(1,1,1), Transparency = 1, Filled = false, Visible = false}),
+                Skeleton = {}
+            }
             for i = 1, 15 do
                 ESPObjects[player].Skeleton[i] = createDrawing("Line", {Color = Color3.new(1,1,1), Thickness = 1.5, Transparency = 1, Visible = false})
             end
@@ -177,24 +180,39 @@ KUYTab:CreateButton({
                     local hrp = player.Character.HumanoidRootPart
                     local humanoid = player.Character.Humanoid
                     if humanoid.Health <= 0 then removeESP(player) continue end
-                    if ESPSettings.TeamCheck and player.Team == LocalPlayer.Team and not ESPSettings.FFA then removeESP(player) continue end
+                    if ESPSettings.TeamCheck and LocalPlayer.Team and player.Team and player.Team == LocalPlayer.Team and not ESPSettings.FFA then
+                        removeESP(player)
+                        continue
+                    end
                     createESP(player)
 
+                    -- กำหนดสีตามทีม
+                    local color = Color3.fromRGB(255,0,0) -- red default
+                    if ESPSettings.TeamCheck and LocalPlayer.Team and player.Team then
+                        color = (player.Team == LocalPlayer.Team) and Color3.fromRGB(0,170,255) or Color3.fromRGB(255,0,0)
+                    end
+
+                    -- Box ESP
                     local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
                     local size = Vector2.new(50,100)/(hrp.Position - Camera.CFrame.Position).Magnitude*8
                     local box = ESPObjects[player].Box
                     box.Size = size
                     box.Position = Vector2.new(screenPos.X - size.X/2, screenPos.Y - size.Y/2)
-                    box.Color = Color3.fromRGB(255,255,0)
+                    box.Color = color
                     box.Visible = onScreen and ESPSettings.Box
 
+                    -- Skeleton ESP
                     if ESPSettings.Skeleton then
                         local char = player.Character
-                        local parts = {Head = char:FindFirstChild("Head"), Torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"), HRP = hrp,
+                        local parts = {
+                            Head = char:FindFirstChild("Head"),
+                            Torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
+                            HRP = hrp,
                             LeftArm = char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
                             RightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
                             LeftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
-                            RightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")}
+                            RightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
+                        }
 
                         local lines = ESPObjects[player].Skeleton
                         local function connect(p1,p2,index)
@@ -204,10 +222,14 @@ KUYTab:CreateButton({
                                 if onscreen1 and onscreen2 then
                                     lines[index].From = Vector2.new(pos1.X,pos1.Y)
                                     lines[index].To = Vector2.new(pos2.X,pos2.Y)
-                                    lines[index].Color = Color3.fromRGB(0,255,255)
+                                    lines[index].Color = color
                                     lines[index].Visible = true
-                                else lines[index].Visible = false end
-                            else lines[index].Visible = false end
+                                else
+                                    lines[index].Visible = false
+                                end
+                            else
+                                lines[index].Visible = false
+                            end
                         end
 
                         connect(parts.Head, parts.Torso, 1)
@@ -216,7 +238,9 @@ KUYTab:CreateButton({
                         connect(parts.Torso, parts.LeftLeg, 4)
                         connect(parts.Torso, parts.RightLeg, 5)
                     end
-                else removeESP(player) end
+                else
+                    removeESP(player)
+                end
             end
         end
 
@@ -227,6 +251,7 @@ KUYTab:CreateButton({
             end
         end)
 
-        Players.PlayerRemoving:Connect(function(plr) removeESP(plr) end)
+        Players.PlayerRemoving:Connect(removeESP)
     end
 })
+
