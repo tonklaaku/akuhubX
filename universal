@@ -1,0 +1,281 @@
+local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Orion/main/source"))()
+
+local Window = OrionLib:MakeWindow({
+	Name = "HUAKUY",
+	IntroText = "เล่นโปรทำเหี้ยไร",
+	HidePremium = false,
+	SaveConfig = true,
+	ConfigFolder = "OrionTest"
+})
+
+local player = Window:MakeTab({
+	Name = "player",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+player:AddButton({
+	Name = "วิ่ง100พี่ตูน",
+	Callback = function()
+		local player = game:GetService("Players").LocalPlayer
+		player.Character.Humanoid.WalkSpeed = 100
+	end
+})
+
+player:AddToggle({
+    Name = "หายตัว (คนอื่นมองไม่เห็น, มึงก็มองไม่เห็นคนอื่น)",
+    Default = false,
+    Callback = function(state)
+        local player = game.Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local root = char:FindFirstChild("HumanoidRootPart")
+
+        if not root then return end
+
+        if state then
+            isInvisible = true
+            originalPos = root.Position
+            -- ย้ายไปไกลๆ ใต้แมพ
+            root.Anchored = true
+            root.CFrame = CFrame.new(999999, -5000, 999999)
+        else
+            isInvisible = false
+            if originalPos then
+                -- ย้ายกลับตำแหน่งเดิม
+                root.CFrame = CFrame.new(originalPos)
+            end
+            root.Anchored = false
+        end
+    end
+})
+
+local KUYfuction = Window:MakeTab({
+	Name = "ฟังชั่นหัวควย",
+	Icon = "rbxassetid://5205790826",
+	PremiumOnly = false
+})
+
+KUYfuction:AddButton({
+	Name = "ล็อคหัวควย",
+	Callback = function()
+		local Players = game:GetService("Players")
+		local RunService = game:GetService("RunService")
+		local Workspace = game:GetService("Workspace")
+		local Camera = Workspace.CurrentCamera
+		local LocalPlayer = Players.LocalPlayer
+
+		local MAX_DISTANCE = 9000
+		local FOV_RADIUS = 100
+
+		local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+		gui.ResetOnSpawn = false
+
+		local fovCircle = Instance.new("Frame", gui)
+		fovCircle.AnchorPoint = Vector2.new(0.5, 0.448)
+		fovCircle.Position = UDim2.new(0.5, 0, 0.448, 0)
+		fovCircle.Size = UDim2.fromOffset(FOV_RADIUS * 2, FOV_RADIUS * 2)
+		fovCircle.BackgroundTransparency = 1
+		fovCircle.BorderSizePixel = 0
+		fovCircle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		fovCircle.Name = "FOV_Circle"
+
+		local uicorner = Instance.new("UICorner", fovCircle)
+		uicorner.CornerRadius = UDim.new(1, 0)
+
+		local uistroke = Instance.new("UIStroke", fovCircle)
+		uistroke.Thickness = 1.3
+
+		local function isInFOV(head)
+			local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+			if not onScreen then return false end
+			local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+			local headPos2D = Vector2.new(screenPos.X, screenPos.Y)
+			local dist = (screenCenter - headPos2D).Magnitude
+			return dist <= FOV_RADIUS
+		end
+
+		local function getClosestTarget()
+			local myChar = LocalPlayer.Character
+			if not myChar or not myChar:FindFirstChild("Head") then return nil end
+
+			local myHead = myChar.Head
+			local closest = nil
+			local shortest = MAX_DISTANCE
+			local hasTeamSystem = LocalPlayer.Team ~= nil
+
+			for _, player in ipairs(Players:GetPlayers()) do
+				if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+					local char = player.Character
+					local head = char.Head
+					local humanoid = char:FindFirstChild("Humanoid")
+
+					local distance = (head.Position - myHead.Position).Magnitude
+
+					local isSameTeam = hasTeamSystem and player.Team == LocalPlayer.Team
+					local isDead = humanoid and humanoid.Health <= 0
+
+					local rayParams = RaycastParams.new()
+					rayParams.FilterDescendantsInstances = {myChar, Camera}
+					rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+					local result = Workspace:Raycast(myHead.Position, (head.Position - myHead.Position).Unit * distance, rayParams)
+					local isWallBlocked = result and result.Instance and not result.Instance:IsDescendantOf(char)
+
+					if distance <= MAX_DISTANCE and
+   						not isSameTeam and
+ 						not isDead and
+ 						not isWallBlocked and
+					 	isInFOV(head) and
+ 						distance < shortest then
+						shortest = distance
+						closest = head
+					end
+				end
+			end
+
+			return closest
+		end
+
+		RunService.RenderStepped:Connect(function()
+			local target = getClosestTarget()
+			if target then
+				Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+			end
+		end)
+	end
+})
+
+KUYfuction:AddButton({
+    Name = "ESP เต็มระบบ",
+    Callback = function()
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local Camera = workspace.CurrentCamera
+        local LocalPlayer = Players.LocalPlayer
+
+        local ESPSettings = {
+            Box = true,
+            Skeleton = true,
+            TeamCheck = true,
+            FFA = false,
+            UpdateRate = 0.01
+        }
+
+        local ESPObjects = {}
+
+        local function removeESP(player)
+            if ESPObjects[player] then
+                for _, obj in pairs(ESPObjects[player]) do
+                    if typeof(obj) == "table" then
+                        for _, item in pairs(obj) do
+                            if item then item:Remove() end
+                        end
+                    elseif obj then
+                        obj:Remove()
+                    end
+                end
+                ESPObjects[player] = nil
+            end
+        end
+
+        local function createDrawing(type, props)
+            local draw = Drawing.new(type)
+            for i, v in pairs(props) do
+                draw[i] = v
+            end
+            return draw
+        end
+
+        local function createESP(player)
+            if ESPObjects[player] then return end
+            ESPObjects[player] = {
+                Box = createDrawing("Square", {Thickness = 1, Color = Color3.new(1,1,1), Transparency = 1, Filled = false, Visible = false}),
+                Skeleton = {}
+            }
+
+            for i = 1, 15 do
+                ESPObjects[player].Skeleton[i] = createDrawing("Line", {Color = Color3.new(1,1,1), Thickness = 1.5, Transparency = 1, Visible = false})
+            end
+        end
+
+        local function updateESP()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+                    local hrp = player.Character.HumanoidRootPart
+                    local humanoid = player.Character.Humanoid
+                    if humanoid.Health <= 0 then
+                        removeESP(player)
+                        continue
+                    end
+
+                    if ESPSettings.TeamCheck and player.Team == LocalPlayer.Team and not ESPSettings.FFA then
+                        removeESP(player)
+                        continue
+                    end
+
+                    createESP(player)
+
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                    local size = Vector2.new(50, 100) / (hrp.Position - Camera.CFrame.Position).Magnitude * 8
+                    local box = ESPObjects[player].Box
+
+                    box.Size = size
+                    box.Position = Vector2.new(screenPos.X - size.X / 2, screenPos.Y - size.Y / 2)
+                    box.Color = Color3.fromRGB(255, 255, 0)
+                    box.Visible = onScreen and ESPSettings.Box
+
+                    if ESPSettings.Skeleton then
+                        local char = player.Character
+                        local parts = {
+                            Head = char:FindFirstChild("Head"),
+                            Torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
+                            HRP = hrp,
+                            LeftArm = char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
+                            RightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
+                            LeftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
+                            RightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg"),
+                        }
+
+                        local lines = ESPObjects[player].Skeleton
+
+                        local function connect(p1, p2, index)
+                            if p1 and p2 then
+                                local pos1, onscreen1 = Camera:WorldToViewportPoint(p1.Position)
+                                local pos2, onscreen2 = Camera:WorldToViewportPoint(p2.Position)
+                                if onscreen1 and onscreen2 then
+                                    lines[index].From = Vector2.new(pos1.X, pos1.Y)
+                                    lines[index].To = Vector2.new(pos2.X, pos2.Y)
+                                    lines[index].Color = Color3.fromRGB(0, 255, 255)
+                                    lines[index].Visible = true
+                                else
+                                    lines[index].Visible = false
+                                end
+                            else
+                                lines[index].Visible = false
+                            end
+                        end
+
+                        connect(parts.Head, parts.Torso, 1)
+                        connect(parts.Torso, parts.LeftArm, 2)
+                        connect(parts.Torso, parts.RightArm, 3)
+                        connect(parts.Torso, parts.LeftLeg, 4)
+                        connect(parts.Torso, parts.RightLeg, 5)
+                    end
+                else
+                    removeESP(player)
+                end
+            end
+        end
+
+        task.spawn(function()
+            while true do
+                pcall(updateESP)
+                task.wait(ESPSettings.UpdateRate)
+            end
+        end)
+
+        Players.PlayerRemoving:Connect(function(plr)
+            removeESP(plr)
+        end)
+    end
+})
