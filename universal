@@ -49,8 +49,9 @@ PlayerTab:CreateToggle({
 -- Tab ฟังก์ชั่นหัวควย
 local KUYTab = Window:CreateTab("ฟังชั่นหัวควย")
 
--- ล็อคหัวควย (Aimbot)
+-- Aimbot + FOV
 local AimbotConnection
+local FOVCircle
 KUYTab:CreateToggle({
     Name = "ล็อคหัวควย (Aimbot)",
     CurrentValue = false,
@@ -65,13 +66,33 @@ KUYTab:CreateToggle({
         local MAX_DISTANCE = 9000
         local FOV_RADIUS = 100
 
+        -- สร้างวงกลม FOV
+        if state then
+            if not FOVCircle then
+                FOVCircle = Drawing.new("Circle")
+                FOVCircle.Color = Color3.fromRGB(255,0,0)
+                FOVCircle.Thickness = 2
+                FOVCircle.NumSides = 64
+                FOVCircle.Radius = FOV_RADIUS
+                FOVCircle.Filled = false
+                FOVCircle.Visible = true
+            end
+        else
+            if FOVCircle then FOVCircle:Remove() FOVCircle=nil end
+        end
+
         if state then
             if AimbotConnection then AimbotConnection:Disconnect() end
             AimbotConnection = RunService.RenderStepped:Connect(function()
+                local mouse = game.Players.LocalPlayer:GetMouse()
+                local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                if FOVCircle then
+                    FOVCircle.Position = screenCenter
+                end
+
                 local function isInFOV(head)
                     local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
                     if not onScreen then return false end
-                    local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                     local headPos2D = Vector2.new(screenPos.X, screenPos.Y)
                     return (screenCenter - headPos2D).Magnitude <= FOV_RADIUS
                 end
@@ -118,14 +139,15 @@ KUYTab:CreateToggle({
         else
             if AimbotConnection then
                 AimbotConnection:Disconnect()
-                AimbotConnection = nil
+                AimbotConnection=nil
             end
         end
     end
 })
 
--- ESP
+-- ESP + Skeleton
 local ESPConnection
+local ESPObjects = {}
 KUYTab:CreateToggle({
     Name = "ESP เต็มระบบ (Drawing, Team/FFA)",
     CurrentValue = false,
@@ -137,14 +159,17 @@ KUYTab:CreateToggle({
         local LocalPlayer = Players.LocalPlayer
 
         local ESPSettings = {Box=true, Skeleton=true, TeamCheck=true, FFA=false, UpdateRate=0.01}
-        local ESPObjects = {}
 
         local function removeESP(player)
             if ESPObjects[player] then
                 for _, obj in pairs(ESPObjects[player]) do
                     if typeof(obj)=="table" then
-                        for _, item in pairs(obj) do if item then item:Remove() end end
-                    elseif obj then obj:Remove() end
+                        for _, item in pairs(obj) do
+                            if item then item:Remove() end
+                        end
+                    elseif obj then
+                        obj:Remove()
+                    end
                 end
                 ESPObjects[player] = nil
             end
