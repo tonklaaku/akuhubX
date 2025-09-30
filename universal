@@ -145,372 +145,160 @@ KUYTab:CreateToggle({
     end
 })
 
-
-local ESPConnection
+-- ========================= ESP System =========================
 local ESPObjects = {}
-KUYTab:CreateToggle({
-    Name = "ESP skeleton",
-    CurrentValue = false,
-    Flag = "ESPToggle",
-    Callback = function(state)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LocalPlayer = Players.LocalPlayer
+local ESPConnection = nil
+local ESPSettings = {
+    Box = false,
+    Skeleton = false,
+    Tracer = false,
+    Name = false,
+    Health = false
+}
 
-        local ESPSettings = {Box=true, Skeleton=true, TeamCheck=true, FFA=false, UpdateRate=0.01}
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 
-        local function removeESP(player)
-            if ESPObjects[player] then
-                for _, obj in pairs(ESPObjects[player]) do
-                    if typeof(obj)=="table" then
-                        for _, item in pairs(obj) do
-                            if item then item:Remove() end
+local function createDrawing(type, props)
+    local draw = Drawing.new(type)
+    for i,v in pairs(props) do draw[i]=v end
+    return draw
+end
+
+local function removeESP(player)
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            if type(obj) == "table" then
+                for _, item in pairs(obj) do if item then item:Remove() end end
+            elseif obj then
+                obj:Remove()
+            end
+        end
+        ESPObjects[player] = nil
+    end
+end
+
+local function createESP(player)
+    if ESPObjects[player] then return end
+    ESPObjects[player] = {}
+    if ESPSettings.Box then
+        ESPObjects[player].Box = createDrawing("Square",{Thickness=2,Color=Color3.new(1,0,0),Filled=false,Visible=false})
+    end
+    if ESPSettings.Skeleton then
+        ESPObjects[player].Skeleton = {}
+        for i=1,15 do
+            ESPObjects[player].Skeleton[i] = createDrawing("Line",{Color=Color3.new(1,0,0),Thickness=1.5,Visible=false})
+        end
+    end
+    if ESPSettings.Tracer then
+        ESPObjects[player].Tracer = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1,Visible=false})
+    end
+    if ESPSettings.Name then
+        ESPObjects[player].Name = createDrawing("Text",{Text=player.Name,Size=16,Center=true,Color=Color3.new(1,1,1),Outline=true,Visible=false})
+    end
+    if ESPSettings.Health then
+        ESPObjects[player].Health = createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(0,1,0),Outline=true,Visible=false})
+    end
+end
+
+local function updateESP()
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local char = player.Character
+            local hrp = char.HumanoidRootPart
+            local humanoid = char.Humanoid
+            createESP(player)
+
+            local pos,onScreen = Camera:WorldToViewportPoint(hrp.Position)
+
+            -- Box
+            if ESPSettings.Box and ESPObjects[player].Box then
+                local box = ESPObjects[player].Box
+                local size = Vector2.new(50,100)/(hrp.Position-Camera.CFrame.Position).Magnitude*8
+                box.Position = Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
+                box.Size = size
+                box.Visible = onScreen
+            end
+
+            -- Skeleton
+            if ESPSettings.Skeleton and ESPObjects[player].Skeleton then
+                local lines = ESPObjects[player].Skeleton
+                local parts = {
+                    Head=char:FindFirstChild("Head"),
+                    Torso=char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
+                    HRP=hrp,
+                    LeftArm=char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
+                    RightArm=char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
+                    LeftLeg=char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
+                    RightLeg=char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
+                }
+
+                local function connect(p1,p2,index)
+                    if p1 and p2 then
+                        local pos1,ons1=Camera:WorldToViewportPoint(p1.Position)
+                        local pos2,ons2=Camera:WorldToViewportPoint(p2.Position)
+                        if ons1 and ons2 then
+                            lines[index].From = Vector2.new(pos1.X,pos1.Y)
+                            lines[index].To = Vector2.new(pos2.X,pos2.Y)
+                            lines[index].Color = Color3.fromRGB(1,0,0)
+                            lines[index].Visible = true
+                        else
+                            lines[index].Visible=false
                         end
-                    elseif obj then
-                        obj:Remove()
+                    else
+                        lines[index].Visible=false
                     end
                 end
-                ESPObjects[player] = nil
+
+                connect(parts.Head,parts.Torso,1)
+                connect(parts.Torso,parts.LeftArm,2)
+                connect(parts.Torso,parts.RightArm,3)
+                connect(parts.Torso,parts.LeftLeg,4)
+                connect(parts.Torso,parts.RightLeg,5)
             end
-        end
 
-        local function createDrawing(type, props)
-            local draw = Drawing.new(type)
-            for i,v in pairs(props) do draw[i]=v end
-            return draw
-        end
-
-        local function createESP(player)
-            if ESPObjects[player] then return end
-            ESPObjects[player] = {Box=createDrawing("Square",{Thickness=1,Color=Color3.new(1,1,1),Transparency=1,Filled=false,Visible=false}),Skeleton={}}
-            for i=1,15 do
-                ESPObjects[player].Skeleton[i] = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1.5,Transparency=1,Visible=false})
+            -- Tracer
+            if ESPSettings.Tracer and ESPObjects[player].Tracer then
+                local tracer = ESPObjects[player].Tracer
+                tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                tracer.To = Vector2.new(pos.X,pos.Y)
+                tracer.Visible = onScreen
             end
-        end
 
-        local function updateESP()
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-                    local hrp = player.Character.HumanoidRootPart
-                    local humanoid = player.Character.Humanoid
-                    if humanoid.Health <= 0 then removeESP(player) continue end
-                    createESP(player)
-
-                    local color = Color3.fromRGB(255,0,0)
-                    if ESPSettings.TeamCheck and LocalPlayer.Team and player.Team then
-                        color = (player.Team == LocalPlayer.Team) and Color3.fromRGB(0,170,255) or Color3.fromRGB(255,0,0)
-                    end
-
-                    local screenPos,onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local size = Vector2.new(50,100)/(hrp.Position-Camera.CFrame.Position).Magnitude*8
-                    local box = ESPObjects[player].Box
-                    box.Size = size
-                    box.Position = Vector2.new(screenPos.X-size.X/2,screenPos.Y-size.Y/2)
-                    box.Color = color
-                    box.Visible = onScreen and ESPSettings.Box
-
-                    if ESPSettings.Skeleton then
-                        local char = player.Character
-                        local parts = {
-                            Head=char:FindFirstChild("Head"),
-                            Torso=char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
-                            HRP=hrp,
-                            LeftArm=char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
-                            RightArm=char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
-                            LeftLeg=char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
-                            RightLeg=char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
-                        }
-
-                        local lines = ESPObjects[player].Skeleton
-                        local function connect(p1,p2,index)
-                            if p1 and p2 then
-                                local pos1,onscreen1=Camera:WorldToViewportPoint(p1.Position)
-                                local pos2,onscreen2=Camera:WorldToViewportPoint(p2.Position)
-                                if onscreen1 and onscreen2 then
-                                    lines[index].From = Vector2.new(pos1.X,pos1.Y)
-                                    lines[index].To = Vector2.new(pos2.X,pos2.Y)
-                                    lines[index].Color = color
-                                    lines[index].Visible = true
-                                else lines[index].Visible=false end
-                            else lines[index].Visible=false end
-                        end
-
-                        connect(parts.Head,parts.Torso,1)
-                        connect(parts.Torso,parts.LeftArm,2)
-                        connect(parts.Torso,parts.RightArm,3)
-                        connect(parts.Torso,parts.LeftLeg,4)
-                        connect(parts.Torso,parts.RightLeg,5)
-                    end
-                else removeESP(player) end
+            -- Name
+            if ESPSettings.Name and ESPObjects[player].Name then
+                local nameText = ESPObjects[player].Name
+                nameText.Position = Vector2.new(pos.X, pos.Y-15)
+                nameText.Visible = onScreen
             end
-        end
 
-        if state then
-            if ESPConnection then ESPConnection:Disconnect() end
-            ESPConnection = RunService.RenderStepped:Connect(function()
-                pcall(updateESP)
-            end)
+            -- Health
+            if ESPSettings.Health and ESPObjects[player].Health then
+                local healthText = ESPObjects[player].Health
+                healthText.Text = "HP: "..math.floor(humanoid.Health)
+                healthText.Position = Vector2.new(pos.X,pos.Y+10)
+                healthText.Visible = onScreen
+            end
         else
-            if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
-            for _,player in ipairs(Players:GetPlayers()) do removeESP(player) end
+            removeESP(player)
         end
-
-        Players.PlayerRemoving:Connect(removeESP)
     end
-})
+end
 
-KUYTab:CreateToggle({
-    Name = "ESP box",
-    CurrentValue = false,
-    Flag = "ESPToggle",
-    Callback = function(state)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LocalPlayer = Players.LocalPlayer
+-- เริ่ม connection เดียว
+if not ESPConnection then
+    ESPConnection = RunService.RenderStepped:Connect(function()
+        pcall(updateESP)
+    end)
+end
 
-        local function removeESP(player)
-            if ESPObjects[player] then
-                if ESPObjects[player].Box then
-                    ESPObjects[player].Box:Remove()
-                end
-                ESPObjects[player] = nil
-            end
-        end
+Players.PlayerRemoving:Connect(removeESP)
 
-        local function createDrawing(type, props)
-            local draw = Drawing.new(type)
-            for i,v in pairs(props) do draw[i]=v end
-            return draw
-        end
-
-        local function createESP(player)
-            if ESPObjects[player] then return end
-            ESPObjects[player] = {
-                Box = createDrawing("Square",{Thickness=2,Color=Color3.new(1,1,1),Transparency=1,Filled=false,Visible=false})
-            }
-        end
-
-        local function updateESP()
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-                    local hrp = player.Character.HumanoidRootPart
-                    local humanoid = player.Character.Humanoid
-                    if humanoid.Health <= 0 then removeESP(player) continue end
-                    createESP(player)
-
-                    -- กำหนดสีตามทีม
-                    local color = Color3.fromRGB(255,0,0) -- ไม่มีทีม = แดง
-                    if LocalPlayer.Team and player.Team then
-                        color = (player.Team == LocalPlayer.Team) and Color3.fromRGB(0,170,255) or Color3.fromRGB(255,0,0)
-                    end
-
-                    -- Box
-                    local box = ESPObjects[player].Box
-                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local distance = (hrp.Position - Camera.CFrame.Position).Magnitude
-                    local size = Vector2.new(50,100)/distance*8
-                    box.Position = Vector2.new(pos.X - size.X/2, pos.Y - size.Y/2)
-                    box.Size = size
-                    box.Color = color
-                    box.Visible = onScreen
-                else
-                    removeESP(player)
-                end
-            end
-        end
-
-        if state then
-            if ESPConnection then ESPConnection:Disconnect() end
-            ESPConnection = RunService.RenderStepped:Connect(function()
-                pcall(updateESP)
-            end)
-        else
-            if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
-            for _,player in ipairs(Players:GetPlayers()) do removeESP(player) end
-        end
-
-        Players.PlayerRemoving:Connect(removeESP)
-    end
-})
-
--- ESP Tracer
-KUYTab:CreateToggle({
-    Name = "ESP tracer",
-    CurrentValue = false,
-    Flag = "ESPToggle",
-    Callback = function(state)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LocalPlayer = Players.LocalPlayer
-
-        local function removeTracer(player)
-            if ESPObjects[player] and ESPObjects[player].Tracer then
-                ESPObjects[player].Tracer:Remove()
-                ESPObjects[player].Tracer = nil
-            end
-        end
-
-        local function createDrawing(type, props)
-            local draw = Drawing.new(type)
-            for i,v in pairs(props) do draw[i]=v end
-            return draw
-        end
-
-        local function createTracer(player)
-            if ESPObjects[player] and ESPObjects[player].Tracer then return end
-            ESPObjects[player] = ESPObjects[player] or {}
-            ESPObjects[player].Tracer = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1,Visible=false})
-        end
-
-        local function updateTracer()
-            for _,player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
-                    createTracer(player)
-                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local tracer = ESPObjects[player].Tracer
-                    tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                    tracer.To = Vector2.new(pos.X, pos.Y)
-                    tracer.Visible = onScreen
-                else
-                    removeTracer(player)
-                end
-            end
-        end
-
-        if state then
-            if ESPConnection then ESPConnection:Disconnect() end
-            ESPConnection = RunService.RenderStepped:Connect(function()
-                pcall(updateTracer)
-            end)
-        else
-            if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
-            for _,player in ipairs(Players:GetPlayers()) do removeTracer(player) end
-        end
-
-        Players.PlayerRemoving:Connect(removeTracer)
-    end
-})
-
--- ESP Name
-KUYTab:CreateToggle({
-    Name = "ESP name",
-    CurrentValue = false,
-    Flag = "ESPToggle",
-    Callback = function(state)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LocalPlayer = Players.LocalPlayer
-
-        local function removeName(player)
-            if ESPObjects[player] and ESPObjects[player].Name then
-                ESPObjects[player].Name:Remove()
-                ESPObjects[player].Name = nil
-            end
-        end
-
-        local function createDrawing(type, props)
-            local draw = Drawing.new(type)
-            for i,v in pairs(props) do draw[i]=v end
-            return draw
-        end
-
-        local function createName(player)
-            if ESPObjects[player] and ESPObjects[player].Name then return end
-            ESPObjects[player] = ESPObjects[player] or {}
-            ESPObjects[player].Name = createDrawing("Text",{Text=player.Name,Size=16,Center=true,Color=Color3.new(1,1,1),Outline=true,Visible=false})
-        end
-
-        local function updateName()
-            for _,player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
-                    createName(player)
-                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local nameText = ESPObjects[player].Name
-                    nameText.Position = Vector2.new(pos.X, pos.Y - 15)
-                    nameText.Visible = onScreen
-                else
-                    removeName(player)
-                end
-            end
-        end
-
-        if state then
-            if ESPConnection then ESPConnection:Disconnect() end
-            ESPConnection = RunService.RenderStepped:Connect(function()
-                pcall(updateName)
-            end)
-        else
-            if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
-            for _,player in ipairs(Players:GetPlayers()) do removeName(player) end
-        end
-
-        Players.PlayerRemoving:Connect(removeName)
-    end
-})
-
--- ESP Health
-KUYTab:CreateToggle({
-    Name = "ESP health",
-    CurrentValue = false,
-    Flag = "ESPToggle",
-    Callback = function(state)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Camera = workspace.CurrentCamera
-        local LocalPlayer = Players.LocalPlayer
-
-        local function removeHealth(player)
-            if ESPObjects[player] and ESPObjects[player].Health then
-                ESPObjects[player].Health:Remove()
-                ESPObjects[player].Health = nil
-            end
-        end
-
-        local function createDrawing(type, props)
-            local draw = Drawing.new(type)
-            for i,v in pairs(props) do draw[i]=v end
-            return draw
-        end
-
-        local function createHealth(player)
-            if ESPObjects[player] and ESPObjects[player].Health then return end
-            ESPObjects[player] = ESPObjects[player] or {}
-            ESPObjects[player].Health = createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(0,1,0),Outline=true,Visible=false})
-        end
-
-        local function updateHealth()
-            for _,player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
-                    local humanoid = player.Character.Humanoid
-                    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                    createHealth(player)
-                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local healthText = ESPObjects[player].Health
-                    healthText.Text = "HP: "..math.floor(humanoid.Health)
-                    healthText.Position = Vector2.new(pos.X, pos.Y + 10)
-                    healthText.Visible = onScreen
-                else
-                    removeHealth(player)
-                end
-            end
-        end
-
-        if state then
-            if ESPConnection then ESPConnection:Disconnect() end
-            ESPConnection = RunService.RenderStepped:Connect(function()
-                pcall(updateHealth)
-            end)
-        else
-            if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
-            for _,player in ipairs(Players:GetPlayers()) do removeHealth(player) end
-        end
-
-        Players.PlayerRemoving:Connect(removeHealth)
-    end
-})
+-- Rayfield Toggles สำหรับเปิด/ปิดแต่ละ ESP
+KUYTab:CreateToggle({Name="ESP box", CurrentValue=false, Flag="ESPBox", Callback=function(state) ESPSettings.Box=state end})
+KUYTab:CreateToggle({Name="ESP skeleton", CurrentValue=false, Flag="ESPSkeleton", Callback=function(state) ESPSettings.Skeleton=state end})
+KUYTab:CreateToggle({Name="ESP tracer", CurrentValue=false, Flag="ESPTracer", Callback=function(state) ESPSettings.Tracer=state end})
+KUYTab:CreateToggle({Name="ESP name", CurrentValue=false, Flag="ESPName", Callback=function(state) ESPSettings.Name=state end})
+KUYTab:CreateToggle({Name="ESP health", CurrentValue=false, Flag="ESPHealth", Callback=function(state) ESPSettings.Health=state end})
