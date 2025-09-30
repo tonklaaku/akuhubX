@@ -51,7 +51,7 @@ player:AddToggle({
 
 local KUYfuction = Window:MakeTab({
 	Name = "ฟังชั่นหัวควย",
-	Icon = "rbxassetid://5205790826",
+	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
