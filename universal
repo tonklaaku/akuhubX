@@ -66,7 +66,6 @@ KUYTab:CreateToggle({
         local MAX_DISTANCE = 9000
         local FOV_RADIUS = 100
 
-        -- สร้างวงกลม FOV
         if state then
             if not FOVCircle then
                 FOVCircle = Drawing.new("Circle")
@@ -84,7 +83,6 @@ KUYTab:CreateToggle({
         if state then
             if AimbotConnection then AimbotConnection:Disconnect() end
             AimbotConnection = RunService.RenderStepped:Connect(function()
-                local mouse = game.Players.LocalPlayer:GetMouse()
                 local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                 if FOVCircle then
                     FOVCircle.Position = screenCenter
@@ -145,7 +143,7 @@ KUYTab:CreateToggle({
     end
 })
 
-
+-- ESP
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
@@ -157,21 +155,18 @@ local ESPSettings = {
     Tracer = false,
     Name = false,
     Health = false,
-    TeamCheck = true,
-    FFA = false
+    TeamCheck = true
 }
 
 local ESPObjects = {}
 local ESPConnection
 
--- ฟังก์ชันสร้าง Drawing
 local function createDrawing(type, props)
     local draw = Drawing.new(type)
     for i,v in pairs(props) do draw[i]=v end
     return draw
 end
 
--- ลบ ESP
 local function removeESP(player)
     if ESPObjects[player] then
         for _, obj in pairs(ESPObjects[player]) do
@@ -185,7 +180,6 @@ local function removeESP(player)
     end
 end
 
--- สร้าง ESP สำหรับผู้เล่น
 local function createESP(player)
     if ESPObjects[player] then return end
     ESPObjects[player] = {}
@@ -194,7 +188,7 @@ local function createESP(player)
     end
     if ESPSettings.Skeleton then
         ESPObjects[player].Skeleton = {}
-        for i=1,15 do
+        for i=1,6 do
             ESPObjects[player].Skeleton[i] = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1.5,Visible=false})
         end
     end
@@ -209,7 +203,6 @@ local function createESP(player)
     end
 end
 
--- อัปเดต ESP
 local function updateESP()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
@@ -242,7 +235,6 @@ local function updateESP()
                 local parts = {
                     Head=char:FindFirstChild("Head"),
                     Torso=char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
-                    HRP=hrp,
                     LeftArm=char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
                     RightArm=char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
                     LeftLeg=char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
@@ -251,22 +243,25 @@ local function updateESP()
                 local lines = ESPObjects[player].Skeleton
                 local function connect(p1,p2,index)
                     if p1 and p2 then
-                        local pos1,onscreen1=Camera:WorldToViewportPoint(p1.Position)
-                        local pos2,onscreen2=Camera:WorldToViewportPoint(p2.Position)
-                        if onscreen1 and onscreen2 then
+                        local pos1,ons1 = Camera:WorldToViewportPoint(p1.Position)
+                        local pos2,ons2 = Camera:WorldToViewportPoint(p2.Position)
+                        if ons1 and ons2 then
                             lines[index].From = Vector2.new(pos1.X,pos1.Y)
                             lines[index].To = Vector2.new(pos2.X,pos2.Y)
                             lines[index].Color = color
                             lines[index].Visible = true
-                        else lines[index].Visible=false end
-                    else lines[index].Visible=false end
+                        else
+                            lines[index].Visible=false
+                        end
+                    else
+                        lines[index].Visible=false
+                    end
                 end
-                connect(parts.Head,parts.Torso,1)
-                connect(parts.Torso,parts.LeftArm,2)
-                connect(parts.Torso,parts.RightArm,3)
-                connect(parts.Torso,parts.Torso,4)
-                connect(parts.Torso,parts.LeftLeg,5)
-                connect(parts.Torso,parts.RightLeg,6)
+                connect(parts.Head, parts.Torso,1)
+                connect(parts.Torso, parts.LeftArm,2)
+                connect(parts.Torso, parts.RightArm,3)
+                connect(parts.Torso, parts.LeftLeg,4)
+                connect(parts.Torso, parts.RightLeg,5)
             end
 
             -- Tracer
@@ -303,14 +298,14 @@ local function updateESP()
     end
 end
 
--- Toggle ESP แต่ละอัน
-local function createESPToggle(name, key)
+-- Toggle ESP
+local function createESPToggle(name,key)
     KUYTab:CreateToggle({
-        Name = name,
-        CurrentValue = false,
-        Flag = key,
-        Callback = function(state)
-            ESPSettings[key] = state
+        Name=name,
+        CurrentValue=false,
+        Flag=key,
+        Callback=function(state)
+            ESPSettings[key]=state
             if ESPConnection then ESPConnection:Disconnect() end
             if state then
                 ESPConnection = RunService.RenderStepped:Connect(function()
