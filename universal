@@ -67,6 +67,7 @@ local LocalPlayer = Players.LocalPlayer
 -- =========================
 local AimbotConnection
 local FOVCircle
+
 KUYTab:CreateToggle({
     Name = "ล็อคหัวควย (Aimbot)",
     CurrentValue = false,
@@ -76,7 +77,7 @@ KUYTab:CreateToggle({
         local FOV_RADIUS = 100
 
         if state then
-            if not FOVCircle and Drawing then
+            if Drawing and not FOVCircle then
                 FOVCircle = Drawing.new("Circle")
                 FOVCircle.Color = Color3.fromRGB(255,0,0)
                 FOVCircle.Thickness = 2
@@ -88,6 +89,9 @@ KUYTab:CreateToggle({
 
             if AimbotConnection then AimbotConnection:Disconnect() end
             AimbotConnection = RunService.RenderStepped:Connect(function()
+                local myChar = LocalPlayer.Character
+                if not myChar or not myChar:FindFirstChild("Head") then return end
+
                 local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                 if FOVCircle then FOVCircle.Position = screenCenter end
 
@@ -98,28 +102,26 @@ KUYTab:CreateToggle({
                 end
 
                 local function getClosestTarget()
-                    local myChar = LocalPlayer.Character
-                    if not myChar or not myChar:FindFirstChild("Head") then return nil end
                     local closest, shortest = nil, MAX_DISTANCE
-
                     for _, player in ipairs(Players:GetPlayers()) do
                         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
                             local head = player.Character.Head
                             local humanoid = player.Character:FindFirstChild("Humanoid")
-                            local distance = (head.Position - myChar.Head.Position).Magnitude
-                            local isSameTeam = LocalPlayer.Team and player.Team == LocalPlayer.Team
-                            local isDead = humanoid and humanoid.Health <= 0
-
-                            local rayParams = RaycastParams.new()
-                            rayParams.FilterDescendantsInstances = {myChar, Camera}
-                            rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-                            local result = Workspace:Raycast(myChar.Head.Position, (head.Position - myChar.Head.Position).Unit * distance, rayParams)
-                            local isWallBlocked = result and result.Instance and not result.Instance:IsDescendantOf(player.Character)
-
-                            if distance < shortest and not isSameTeam and not isDead and not isWallBlocked and isInFOV(head) then
-                                closest = head
-                                shortest = distance
+                            if humanoid and humanoid.Health>0 then
+                                local distance = (head.Position - myChar.Head.Position).Magnitude
+                                local isSameTeam = LocalPlayer.Team and player.Team == LocalPlayer.Team
+                                if not isSameTeam and distance<shortest and isInFOV(head) then
+                                    -- ตรวจสอบกำแพง
+                                    local rayParams = RaycastParams.new()
+                                    rayParams.FilterDescendantsInstances = {myChar, Camera}
+                                    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+                                    local result = Workspace:Raycast(myChar.Head.Position,(head.Position-myChar.Head.Position).Unit*distance, rayParams)
+                                    local blocked = result and result.Instance and not result.Instance:IsDescendantOf(player.Character)
+                                    if not blocked then
+                                        closest = head
+                                        shortest = distance
+                                    end
+                                end
                             end
                         end
                     end
@@ -141,25 +143,25 @@ KUYTab:CreateToggle({
 -- =========================
 -- ESP
 -- =========================
-local ESPSettings = {Box=false, Skeleton=false, Tracer=false, Name=false, Health=false, TeamCheck=true}
-local ESPObjects = {}
+local ESPSettings={Box=false,Skeleton=false,Tracer=false,Name=false,Health=false,TeamCheck=true}
+local ESPObjects={}
 local ESPConnection
 
 local function anyESPEnabled()
     for k,v in pairs(ESPSettings) do
-        if k ~= "TeamCheck" and v then return true end
+        if k~="TeamCheck" and v then return true end
     end
     return false
 end
 
-local function createDrawing(type, props)
-    if not Drawing then return end
+local function createDrawing(type,props)
+    if not Drawing then return nil end
     local draw = Drawing.new(type)
-    for i,v in pairs(props) do draw[i] = v end
+    for i,v in pairs(props) do draw[i]=v end
     return draw
 end
 
-local function removeFeatureFromPlayer(player, feature)
+local function removeFeatureFromPlayer(player,feature)
     if not ESPObjects[player] then return end
     local obj = ESPObjects[player][feature]
     if obj then
@@ -188,24 +190,16 @@ end
 local function createESP(player)
     if ESPObjects[player] then return end
     ESPObjects[player]={}
-    if ESPSettings.Box then
-        ESPObjects[player].Box=createDrawing("Square",{Thickness=2,Color=Color3.new(1,1,1),Filled=false,Visible=false})
-    end
+    if ESPSettings.Box then ESPObjects[player].Box=createDrawing("Square",{Thickness=2,Color=Color3.new(1,1,1),Filled=false,Visible=false}) end
     if ESPSettings.Skeleton then
         ESPObjects[player].Skeleton={}
         for i=1,15 do
             ESPObjects[player].Skeleton[i]=createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1.5,Visible=false})
         end
     end
-    if ESPSettings.Tracer then
-        ESPObjects[player].Tracer=createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1,Visible=false})
-    end
-    if ESPSettings.Name then
-        ESPObjects[player].Name=createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(1,1,1),Outline=true,Visible=false})
-    end
-    if ESPSettings.Health then
-        ESPObjects[player].Health=createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(0,1,0),Outline=true,Visible=false})
-    end
+    if ESPSettings.Tracer then ESPObjects[player].Tracer=createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1,Visible=false}) end
+    if ESPSettings.Name then ESPObjects[player].Name=createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(1,1,1),Outline=true,Visible=false}) end
+    if ESPSettings.Health then ESPObjects[player].Health=createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(0,1,0),Outline=true,Visible=false}) end
 end
 
 function updateESP()
@@ -225,6 +219,7 @@ function updateESP()
             local distance=(hrp.Position-Camera.CFrame.Position).Magnitude
             local boxSize=Vector2.new(50,100)/distance*8
 
+            -- Box
             if ESPSettings.Box and ESPObjects[player].Box then
                 local box=ESPObjects[player].Box
                 box.Size=boxSize
@@ -303,21 +298,16 @@ end
 -- ESP Connection
 local function startESP()
     if ESPConnection then return end
-    ESPConnection = RunService.RenderStepped:Connect(function()
+    ESPConnection=RunService.RenderStepped:Connect(function()
         pcall(updateESP)
     end)
 end
 
 local function stopESP()
-    if ESPConnection then
-        ESPConnection:Disconnect()
-        ESPConnection=nil
-    end
+    if ESPConnection then ESPConnection:Disconnect() ESPConnection=nil end
 end
 
--- =========================
 -- ESP Toggles
--- =========================
 local function createESPToggle(name, feature)
     KUYTab:CreateToggle({
         Name=name,
