@@ -156,7 +156,7 @@ KUYfuction:AddButton({
             Skeleton = true,
             TeamCheck = true,
             FFA = false,
-            UpdateRate = 0.01
+            UpdateRate = 0.03 -- อัปเดตทุก 0.03 วินาที
         }
 
         local ESPObjects = {}
@@ -187,12 +187,11 @@ KUYfuction:AddButton({
         local function createESP(player)
             if ESPObjects[player] then return end
             ESPObjects[player] = {
-                Box = createDrawing("Square", {Thickness = 1, Color = Color3.new(1,1,1), Transparency = 1, Filled = false, Visible = false}),
+                Box = createDrawing("Square", {Thickness = 2, Color = Color3.fromRGB(255,255,0), Filled = false, Visible = false}),
                 Skeleton = {}
             }
-
             for i = 1, 15 do
-                ESPObjects[player].Skeleton[i] = createDrawing("Line", {Color = Color3.new(1,1,1), Thickness = 1.5, Transparency = 1, Visible = false})
+                ESPObjects[player].Skeleton[i] = createDrawing("Line", {Color = Color3.fromRGB(0,255,255), Thickness = 1.5, Visible = false})
             end
         end
 
@@ -214,12 +213,13 @@ KUYfuction:AddButton({
                     createESP(player)
 
                     local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                    local size = Vector2.new(50, 100) / (hrp.Position - Camera.CFrame.Position).Magnitude * 8
+                    local distance = (hrp.Position - Camera.CFrame.Position).Magnitude
+                    local scale = math.clamp(300 / distance, 0.5, 3) -- ปรับขนาด Box ตามระยะ
+                    local boxSize = Vector2.new(50,100) * scale
                     local box = ESPObjects[player].Box
 
-                    box.Size = size
-                    box.Position = Vector2.new(screenPos.X - size.X / 2, screenPos.Y - size.Y / 2)
-                    box.Color = Color3.fromRGB(255, 255, 0)
+                    box.Size = boxSize
+                    box.Position = Vector2.new(screenPos.X - boxSize.X/2, screenPos.Y - boxSize.Y/2)
                     box.Visible = onScreen and ESPSettings.Box
 
                     if ESPSettings.Skeleton then
@@ -238,12 +238,11 @@ KUYfuction:AddButton({
 
                         local function connect(p1, p2, index)
                             if p1 and p2 then
-                                local pos1, onscreen1 = Camera:WorldToViewportPoint(p1.Position)
-                                local pos2, onscreen2 = Camera:WorldToViewportPoint(p2.Position)
-                                if onscreen1 and onscreen2 then
+                                local pos1, on1 = Camera:WorldToViewportPoint(p1.Position)
+                                local pos2, on2 = Camera:WorldToViewportPoint(p2.Position)
+                                if on1 and on2 then
                                     lines[index].From = Vector2.new(pos1.X, pos1.Y)
                                     lines[index].To = Vector2.new(pos2.X, pos2.Y)
-                                    lines[index].Color = Color3.fromRGB(0, 255, 255)
                                     lines[index].Visible = true
                                 else
                                     lines[index].Visible = false
@@ -253,6 +252,7 @@ KUYfuction:AddButton({
                             end
                         end
 
+                        -- Skeleton R6/R15
                         connect(parts.Head, parts.Torso, 1)
                         connect(parts.Torso, parts.LeftArm, 2)
                         connect(parts.Torso, parts.RightArm, 3)
@@ -265,11 +265,8 @@ KUYfuction:AddButton({
             end
         end
 
-        task.spawn(function()
-            while true do
-                pcall(updateESP)
-                task.wait(ESPSettings.UpdateRate)
-            end
+        RunService.RenderStepped:Connect(function()
+            pcall(updateESP)
         end)
 
         Players.PlayerRemoving:Connect(function(plr)
