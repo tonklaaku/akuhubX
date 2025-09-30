@@ -10,7 +10,6 @@ local Window = OrionLib:MakeWindow({
 
 local player = Window:MakeTab({
 	Name = "player",
-	Icon = "",
 	PremiumOnly = false
 })
 
@@ -51,7 +50,6 @@ player:AddToggle({
 
 local KUYfuction = Window:MakeTab({
 	Name = "ฟังชั่นหัวควย",
-	Icon = "",
 	PremiumOnly = false
 })
 
