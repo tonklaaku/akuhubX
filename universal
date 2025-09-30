@@ -164,7 +164,7 @@ local ESPConnection
 -- ฟังก์ชันช่วย: เช็คว่ามี ESP ตัวไหนเปิดอยู่บ้าง
 local function anyESPEnabled()
     for k,v in pairs(ESPSettings) do
-        if k ~= "TeamCheck" and k ~= "FFA" and v then
+        if k ~= "TeamCheck" and v then
             return true
         end
     end
@@ -178,7 +178,7 @@ local function removeFeatureFromPlayer(player, feature)
     if not obj then return end
 
     if typeof(obj) == "table" then
-        for _,v in pairs(obj) do if v then pcall(function() v:Remove() end) end end
+        for _,v in pairs(obj) do if v then pcall(function() v:Remove() end) end
     else
         pcall(function() obj:Remove() end)
     end
@@ -207,6 +207,149 @@ local function stopESPConnection()
         ESPConnection = nil
     end
 end
+
+
+-- ฟังก์ชันสร้าง Drawing
+local function createDrawing(type, props)
+    local draw = Drawing.new(type)
+    for i,v in pairs(props) do draw[i]=v end
+    return draw
+end
+
+-- ลบ ESP ของผู้เล่น
+local function removeESP(player)
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            if typeof(obj) == "table" then
+                for _,v in pairs(obj) do if v then pcall(function() v:Remove() end) end
+            elseif obj then
+                pcall(function() obj:Remove() end)
+            end
+        end
+        ESPObjects[player] = nil
+    end
+end
+
+-- สร้าง ESP ของผู้เล่น
+local function createESP(player)
+    if ESPObjects[player] then return end
+    ESPObjects[player] = {}
+    if ESPSettings.Box then
+        ESPObjects[player].Box = createDrawing("Square",{Thickness=2,Color=Color3.new(1,1,1),Filled=false,Visible=false})
+    end
+    if ESPSettings.Skeleton then
+        ESPObjects[player].Skeleton = {}
+        for i=1,15 do
+            ESPObjects[player].Skeleton[i] = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1.5,Visible=false})
+        end
+    end
+    if ESPSettings.Tracer then
+        ESPObjects[player].Tracer = createDrawing("Line",{Color=Color3.new(1,1,1),Thickness=1,Visible=false})
+    end
+    if ESPSettings.Name then
+        ESPObjects[player].Name = createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(1,1,1),Outline=true,Visible=false})
+    end
+    if ESPSettings.Health then
+        ESPObjects[player].Health = createDrawing("Text",{Text="",Size=16,Center=true,Color=Color3.new(0,1,0),Outline=true,Visible=false})
+    end
+end
+
+-- อัปเดต ESP
+function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local hrp = player.Character.HumanoidRootPart
+            local humanoid = player.Character.Humanoid
+            if humanoid.Health <= 0 then removeESP(player) goto continue end
+            createESP(player)
+
+            local color = Color3.fromRGB(255,0,0)
+            if ESPSettings.TeamCheck and LocalPlayer.Team and player.Team then
+                color = (player.Team == LocalPlayer.Team) and Color3.fromRGB(0,170,255) or Color3.fromRGB(255,0,0)
+            end
+
+            local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            local distance = (hrp.Position - Camera.CFrame.Position).Magnitude
+            local boxSize = Vector2.new(50,100)/distance*8
+
+            -- Box
+            if ESPSettings.Box and ESPObjects[player].Box then
+                local box = ESPObjects[player].Box
+                box.Size = boxSize
+                box.Position = Vector2.new(screenPos.X - boxSize.X/2, screenPos.Y - boxSize.Y/2)
+                box.Color = color
+                box.Visible = onScreen
+            end
+
+            -- Skeleton
+            if ESPSettings.Skeleton and ESPObjects[player].Skeleton then
+                local char = player.Character
+                local parts = {
+                    Head=char:FindFirstChild("Head"),
+                    Torso=char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
+                    HRP=hrp,
+                    LeftArm=char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
+                    RightArm=char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
+                    LeftLeg=char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
+                    RightLeg=char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
+                }
+                local lines = ESPObjects[player].Skeleton
+                local function connect(p1,p2,index)
+                    if p1 and p2 then
+                        local pos1,ons1=Camera:WorldToViewportPoint(p1.Position)
+                        local pos2,ons2=Camera:WorldToViewportPoint(p2.Position)
+                        if ons1 and ons2 then
+                            lines[index].From = Vector2.new(pos1.X,pos1.Y)
+                            lines[index].To = Vector2.new(pos2.X,pos2.Y)
+                            lines[index].Color = color
+                            lines[index].Visible = true
+                        else lines[index].Visible=false end
+                    else lines[index].Visible=false end
+                end
+                connect(parts.Head,parts.Torso,1)
+                connect(parts.Torso,parts.LeftArm,2)
+                connect(parts.Torso,parts.RightArm,3)
+                connect(parts.Torso,parts.Torso,4)
+                connect(parts.Torso,parts.LeftLeg,5)
+                connect(parts.Torso,parts.RightLeg,6)
+            end
+
+            -- Tracer
+            if ESPSettings.Tracer and ESPObjects[player].Tracer then
+                local tracer = ESPObjects[player].Tracer
+                tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+                tracer.Color = color
+                tracer.Visible = onScreen
+            end
+
+            -- Name
+            if ESPSettings.Name and ESPObjects[player].Name then
+                local nameText = ESPObjects[player].Name
+                nameText.Text = player.Name
+                nameText.Position = Vector2.new(screenPos.X, screenPos.Y - 15)
+                nameText.Color = color
+                nameText.Visible = onScreen
+            end
+
+            -- Health
+            if ESPSettings.Health and ESPObjects[player].Health then
+                local healthText = ESPObjects[player].Health
+                healthText.Text = "HP: "..math.floor(humanoid.Health)
+                healthText.Position = Vector2.new(screenPos.X, screenPos.Y + 10)
+                healthText.Color = Color3.fromRGB(0,255,0)
+                healthText.Visible = onScreen
+            end
+
+            ::continue::
+        else
+            removeESP(player)
+        end
+    end
+end
+
+-- เรียก RenderStepped แยก Toggle ของคุณเอง
+
 
 -- Toggle: ESP Box
 KUYTab:CreateToggle({
