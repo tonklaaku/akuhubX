@@ -146,8 +146,11 @@ KUYTab:CreateToggle({
 })
 
 
-local ESPConnection
-local ESPObjects = {}
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
 local ESPSettings = {
     Box = false,
     Skeleton = false,
@@ -155,8 +158,7 @@ local ESPSettings = {
     Name = false,
     Health = false,
     TeamCheck = true,
-    FFA = false,
-    UpdateRate = 0.01
+    FFA = false
 }
 
 local ESPObjects = {}
@@ -213,10 +215,9 @@ local function updateESP()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
             local hrp = player.Character.HumanoidRootPart
             local humanoid = player.Character.Humanoid
-            if humanoid.Health <= 0 then removeESP(player) continue end
+            if humanoid.Health <= 0 then removeESP(player) goto continue end
             createESP(player)
 
-            -- สีตามทีม
             local color = Color3.fromRGB(255,0,0)
             if ESPSettings.TeamCheck and LocalPlayer.Team and player.Team then
                 color = (player.Team == LocalPlayer.Team) and Color3.fromRGB(0,170,255) or Color3.fromRGB(255,0,0)
@@ -263,11 +264,9 @@ local function updateESP()
                 connect(parts.Head,parts.Torso,1)
                 connect(parts.Torso,parts.LeftArm,2)
                 connect(parts.Torso,parts.RightArm,3)
-                connect(parts.Torso,parts.LeftLeg,4)
-                connect(parts.Torso,parts.RightLeg,5)
-            elseif ESPObjects[player].Skeleton then
-                for _,line in pairs(ESPObjects[player].Skeleton) do line:Remove() end
-                ESPObjects[player].Skeleton=nil
+                connect(parts.Torso,parts.Torso,4)
+                connect(parts.Torso,parts.LeftLeg,5)
+                connect(parts.Torso,parts.RightLeg,6)
             end
 
             -- Tracer
@@ -277,9 +276,6 @@ local function updateESP()
                 tracer.To = Vector2.new(screenPos.X, screenPos.Y)
                 tracer.Color = color
                 tracer.Visible = onScreen
-            elseif ESPObjects[player].Tracer then
-                ESPObjects[player].Tracer:Remove()
-                ESPObjects[player].Tracer=nil
             end
 
             -- Name
@@ -289,9 +285,6 @@ local function updateESP()
                 nameText.Position = Vector2.new(screenPos.X, screenPos.Y - 15)
                 nameText.Color = color
                 nameText.Visible = onScreen
-            elseif ESPObjects[player].Name then
-                ESPObjects[player].Name:Remove()
-                ESPObjects[player].Name=nil
             end
 
             -- Health
@@ -301,10 +294,9 @@ local function updateESP()
                 healthText.Position = Vector2.new(screenPos.X, screenPos.Y + 10)
                 healthText.Color = Color3.fromRGB(0,255,0)
                 healthText.Visible = onScreen
-            elseif ESPObjects[player].Health then
-                ESPObjects[player].Health:Remove()
-                ESPObjects[player].Health=nil
             end
+
+            ::continue::
         else
             removeESP(player)
         end
@@ -319,8 +311,8 @@ local function createESPToggle(name, key)
         Flag = key,
         Callback = function(state)
             ESPSettings[key] = state
+            if ESPConnection then ESPConnection:Disconnect() end
             if state then
-                if ESPConnection then ESPConnection:Disconnect() end
                 ESPConnection = RunService.RenderStepped:Connect(function()
                     pcall(updateESP)
                 end)
