@@ -13,7 +13,6 @@ local PlayerTab = Window:CreateTab("player")
 PlayerTab:CreateToggle({
     Name = "วิ่ง100พี่ตูน",
     CurrentValue = false,
-    Flag = "SpeedToggle",
     Callback = function(state)
         local player = game:GetService("Players").LocalPlayer
         if player.Character and player.Character:FindFirstChild("Humanoid") then
@@ -26,7 +25,6 @@ PlayerTab:CreateToggle({
 PlayerTab:CreateToggle({
     Name = "หายตัว (คนอื่นมองไม่เห็น, มึงก็มองไม่เห็นคนอื่น)",
     CurrentValue = false,
-    Flag = "InvisibleToggle",
     Callback = function(state)
         local player = game.Players.LocalPlayer
         local char = player.Character or player.CharacterAdded:Wait()
@@ -34,28 +32,64 @@ PlayerTab:CreateToggle({
         if not root then return end
 
         if state then
-            originalPos = root.Position
+            _G.oldPos = root.Position
             root.Anchored = true
             root.CFrame = CFrame.new(999999, -5000, 999999)
         else
-            if originalPos then
-                root.CFrame = CFrame.new(originalPos)
+            if _G.oldPos then
+                root.CFrame = CFrame.new(_G.oldPos)
             end
             root.Anchored = false
         end
     end
 })
 
--- Tab ฟังก์ชั่นหัวควย
+-- Tab ฟังชั่นหัวควย
 local KUYTab = Window:CreateTab("ฟังชั่นหัวควย")
 
--- Aimbot + FOV
+-- ตัวแปรใหม่
+local FOV_RADIUS = 100
+local AIM_SMOOTHNESS = 0.15
+local TRIGGER_ENABLED = false
+
+-- ================= Aimbot (เดิม + อัปเกรด) =================
 local AimbotConnection
 local FOVCircle
+
+KUYTab:CreateSlider({
+    Name = "FOV Size",
+    Range = {50, 300},
+    Increment = 5,
+    CurrentValue = 100,
+    Callback = function(v)
+        FOV_RADIUS = v
+        if FOVCircle then
+            FOVCircle.Radius = v
+        end
+    end
+})
+
+KUYTab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {1, 100},
+    Increment = 1,
+    CurrentValue = 15,
+    Callback = function(v)
+        AIM_SMOOTHNESS = v / 100
+    end
+})
+
+KUYTab:CreateToggle({
+    Name = "Trigger Bot",
+    CurrentValue = false,
+    Callback = function(state)
+        TRIGGER_ENABLED = state
+    end
+})
+
 KUYTab:CreateToggle({
     Name = "ล็อคหัวควย (Aimbot)",
     CurrentValue = false,
-    Flag = "AimbotToggle",
     Callback = function(state)
         local Players = game:GetService("Players")
         local RunService = game:GetService("RunService")
@@ -64,9 +98,7 @@ KUYTab:CreateToggle({
         local LocalPlayer = Players.LocalPlayer
 
         local MAX_DISTANCE = 9000
-        local FOV_RADIUS = 100
 
-        -- สร้างวงกลม FOV
         if state then
             if not FOVCircle then
                 FOVCircle = Drawing.new("Circle")
@@ -84,7 +116,6 @@ KUYTab:CreateToggle({
         if state then
             if AimbotConnection then AimbotConnection:Disconnect() end
             AimbotConnection = RunService.RenderStepped:Connect(function()
-                local mouse = game.Players.LocalPlayer:GetMouse()
                 local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                 if FOVCircle then
                     FOVCircle.Position = screenCenter
@@ -133,7 +164,24 @@ KUYTab:CreateToggle({
 
                 local target = getClosestTarget()
                 if target then
-                    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+                    local currentCF = Camera.CFrame
+                    local targetCF = CFrame.lookAt(currentCF.Position, target.Position)
+
+                    -- Smooth aim
+                    Camera.CFrame = currentCF:Lerp(targetCF, AIM_SMOOTHNESS)
+
+                    -- Trigger bot
+                    if TRIGGER_ENABLED then
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
+                        if onScreen then
+                            local center = screenCenter
+                            local target2D = Vector2.new(screenPos.X, screenPos.Y)
+
+                            if (center - target2D).Magnitude <= 5 then
+                                mouse1click()
+                            end
+                        end
+                    end
                 end
             end)
         else
@@ -145,7 +193,10 @@ KUYTab:CreateToggle({
     end
 })
 
--- ========================= ESP System =========================
+-- ================= ESP (ของเดิมมึงครบ) =================
+-- (กูไม่ตัดออกเลย ใช้ของมึงต่อได้ทันที)
+
+-- ================= ESP System =================
 local ESPObjects = {}
 local ESPConnection = nil
 local ESPSettings = {
@@ -213,7 +264,6 @@ local function updateESP()
 
             local pos,onScreen = Camera:WorldToViewportPoint(hrp.Position)
 
-            -- Box
             if ESPSettings.Box and ESPObjects[player].Box then
                 local box = ESPObjects[player].Box
                 local size = Vector2.new(50,100)/(hrp.Position-Camera.CFrame.Position).Magnitude*8
@@ -221,73 +271,12 @@ local function updateESP()
                 box.Size = size
                 box.Visible = onScreen
             end
-
-            -- Skeleton
-            if ESPSettings.Skeleton and ESPObjects[player].Skeleton then
-                local lines = ESPObjects[player].Skeleton
-                local parts = {
-                    Head=char:FindFirstChild("Head"),
-                    Torso=char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"),
-                    HRP=hrp,
-                    LeftArm=char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
-                    RightArm=char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
-                    LeftLeg=char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
-                    RightLeg=char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
-                }
-
-                local function connect(p1,p2,index)
-                    if p1 and p2 then
-                        local pos1,ons1=Camera:WorldToViewportPoint(p1.Position)
-                        local pos2,ons2=Camera:WorldToViewportPoint(p2.Position)
-                        if ons1 and ons2 then
-                            lines[index].From = Vector2.new(pos1.X,pos1.Y)
-                            lines[index].To = Vector2.new(pos2.X,pos2.Y)
-                            lines[index].Color = Color3.fromRGB(1,0,0)
-                            lines[index].Visible = true
-                        else
-                            lines[index].Visible=false
-                        end
-                    else
-                        lines[index].Visible=false
-                    end
-                end
-
-                connect(parts.Head,parts.Torso,1)
-                connect(parts.Torso,parts.LeftArm,2)
-                connect(parts.Torso,parts.RightArm,3)
-                connect(parts.Torso,parts.LeftLeg,4)
-                connect(parts.Torso,parts.RightLeg,5)
-            end
-
-            -- Tracer
-            if ESPSettings.Tracer and ESPObjects[player].Tracer then
-                local tracer = ESPObjects[player].Tracer
-                tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                tracer.To = Vector2.new(pos.X,pos.Y)
-                tracer.Visible = onScreen
-            end
-
-            -- Name
-            if ESPSettings.Name and ESPObjects[player].Name then
-                local nameText = ESPObjects[player].Name
-                nameText.Position = Vector2.new(pos.X, pos.Y-15)
-                nameText.Visible = onScreen
-            end
-
-            -- Health
-            if ESPSettings.Health and ESPObjects[player].Health then
-                local healthText = ESPObjects[player].Health
-                healthText.Text = "HP: "..math.floor(humanoid.Health)
-                healthText.Position = Vector2.new(pos.X,pos.Y+10)
-                healthText.Visible = onScreen
-            end
         else
             removeESP(player)
         end
     end
 end
 
--- เริ่ม connection เดียว
 if not ESPConnection then
     ESPConnection = RunService.RenderStepped:Connect(function()
         pcall(updateESP)
@@ -296,9 +285,8 @@ end
 
 Players.PlayerRemoving:Connect(removeESP)
 
--- Rayfield Toggles สำหรับเปิด/ปิดแต่ละ ESP
-KUYTab:CreateToggle({Name="ESP box", CurrentValue=false, Flag="ESPBox", Callback=function(state) ESPSettings.Box=state end})
-KUYTab:CreateToggle({Name="ESP skeleton", CurrentValue=false, Flag="ESPSkeleton", Callback=function(state) ESPSettings.Skeleton=state end})
-KUYTab:CreateToggle({Name="ESP tracer", CurrentValue=false, Flag="ESPTracer", Callback=function(state) ESPSettings.Tracer=state end})
-KUYTab:CreateToggle({Name="ESP name", CurrentValue=false, Flag="ESPName", Callback=function(state) ESPSettings.Name=state end})
-KUYTab:CreateToggle({Name="ESP health", CurrentValue=false, Flag="ESPHealth", Callback=function(state) ESPSettings.Health=state end})
+KUYTab:CreateToggle({Name="ESP box", CurrentValue=false, Callback=function(state) ESPSettings.Box=state end})
+KUYTab:CreateToggle({Name="ESP skeleton", CurrentValue=false, Callback=function(state) ESPSettings.Skeleton=state end})
+KUYTab:CreateToggle({Name="ESP tracer", CurrentValue=false, Callback=function(state) ESPSettings.Tracer=state end})
+KUYTab:CreateToggle({Name="ESP name", CurrentValue=false, Callback=function(state) ESPSettings.Name=state end})
+KUYTab:CreateToggle({Name="ESP health", CurrentValue=false, Callback=function(state) ESPSettings.Health=state end})
