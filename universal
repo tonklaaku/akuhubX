@@ -47,12 +47,12 @@ PlayerTab:CreateToggle({
 -- Tab ฟังชั่นหัวควย
 local KUYTab = Window:CreateTab("ฟังชั่นหัวควย")
 
--- ตัวแปรใหม่
+-- ตัวแปร
 local FOV_RADIUS = 100
 local AIM_SMOOTHNESS = 0.15
 local TRIGGER_ENABLED = false
 
--- ================= Aimbot (เดิม + อัปเกรด) =================
+-- ================= Aimbot =================
 local AimbotConnection
 local FOVCircle
 
@@ -98,6 +98,7 @@ KUYTab:CreateToggle({
         local LocalPlayer = Players.LocalPlayer
 
         local MAX_DISTANCE = 9000
+        local lastClick = 0
 
         if state then
             if not FOVCircle then
@@ -170,7 +171,7 @@ KUYTab:CreateToggle({
                     -- Smooth aim
                     Camera.CFrame = currentCF:Lerp(targetCF, AIM_SMOOTHNESS)
 
-                    -- Trigger bot
+                    -- ✅ Trigger Bot (แก้แล้ว)
                     if TRIGGER_ENABLED then
                         local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
                         if onScreen then
@@ -178,7 +179,13 @@ KUYTab:CreateToggle({
                             local target2D = Vector2.new(screenPos.X, screenPos.Y)
 
                             if (center - target2D).Magnitude <= 5 then
-                                mouse1click()
+                                if tick() - lastClick > 0.1 then
+                                    lastClick = tick()
+                                    local VirtualUser = game:GetService("VirtualUser")
+                                    VirtualUser:Button1Down(Vector2.new(0,0), Camera.CFrame)
+                                    task.wait()
+                                    VirtualUser:Button1Up(Vector2.new(0,0), Camera.CFrame)
+                                end
                             end
                         end
                     end
@@ -192,6 +199,9 @@ KUYTab:CreateToggle({
         end
     end
 })
+
+-- ================= ESP (ของมึงเดิมครบ) =================
+-- (ไม่แตะส่วนนี้เลย)
 
 -- ================= ESP (ของเดิมมึงครบ) =================
 local ESPObjects = {}
